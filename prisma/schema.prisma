@@ -1,0 +1,355 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id           String         @id @default(uuid())
+  email        String         @unique
+  passwordHash String
+  roleId       String
+  role         Role           @relation(fields: [roleId], references: [id])
+  workspaces   Workspace[]
+  notifications Notification[]
+  auditLogs    AuditLog[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([roleId])
+}
+
+model Role {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  permissions RolePermission[]
+  users       User[]
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  name        String           @unique
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model Workspace {
+  id           String             @id @default(uuid())
+  name         String
+  targetRole   String
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  archived     Boolean            @default(false)
+  archivedAt   DateTime?
+  companies    WorkspaceCompany[]
+  roadmaps     Roadmap[]
+  tests        Test[]
+  attempts     Attempt[]
+  progress     Progress?
+  bookmarks    Bookmark[]
+  analytics    Analytics[]
+  studyHistory StudyHistory[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([userId])
+}
+
+model Company {
+  id          String                   @id @default(uuid())
+  name        String                   @unique
+  logo        String?
+  themeColor  String?
+  description String?
+  active      Boolean                  @default(true)
+  workspaces  WorkspaceCompany[]
+  questions   CompanyQuestionMapping[]
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+}
+
+model WorkspaceCompany {
+  workspaceId String
+  companyId   String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, companyId])
+}
+
+model Subject {
+  id          String     @id @default(uuid())
+  name        String     @unique
+  description String?
+  topics      Topic[]
+  questions   Question[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Topic {
+  id            String             @id @default(uuid())
+  name          String
+  description   String?
+  subjectId     String
+  subject       Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subtopics     Subtopic[]
+  roadmapNodes  RoadmapNode[]
+  questions     Question[]
+  tests         Test[]
+  prerequisites TopicPrerequisite[] @relation("TopicPrerequisites")
+  requiredFor   TopicPrerequisite[] @relation("TopicRequiredFor")
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@unique([subjectId, name])
+}
+
+model TopicPrerequisite {
+  topicId        String
+  prerequisiteId String
+  topic          Topic  @relation("TopicPrerequisites", fields: [topicId], references: [id], onDelete: Cascade)
+  prerequisite   Topic  @relation("TopicRequiredFor", fields: [prerequisiteId], references: [id], onDelete: Cascade)
+
+  @@id([topicId, prerequisiteId])
+}
+
+model Subtopic {
+  id          String      @id @default(uuid())
+  name        String
+  description String?
+  topicId     String
+  topic       Topic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  studyLinks  StudyLink[]
+  questions   Question[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([topicId, name])
+}
+
+model StudyLink {
+  id                 String   @id @default(uuid())
+  subtopicId         String
+  subtopic           Subtopic @relation(fields: [subtopicId], references: [id], onDelete: Cascade)
+  description        String?
+  learningObjectives String?
+  estimatedTime      Int      @default(0)
+  prerequisites      String?
+  gfgUrl             String?
+  officialDocUrl     String?
+  additionalResources String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Roadmap {
+  id          String        @id @default(uuid())
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  nodes       RoadmapNode[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([workspaceId])
+}
+
+model RoadmapNode {
+  id            String   @id @default(uuid())
+  roadmapId     String
+  roadmap       Roadmap  @relation(fields: [roadmapId], references: [id], onDelete: Cascade)
+  topicId       String
+  topic         Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  status        String   @default("LOCKED")
+  sequenceOrder Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([roadmapId, topicId])
+}
+
+model Question {
+  id           String                   @id @default(uuid())
+  subjectId    String
+  subject      Subject                  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topicId      String
+  topic        Topic                    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  subtopicId   String
+  subtopic     Subtopic                 @relation(fields: [subtopicId], references: [id], onDelete: Cascade)
+  questionType String
+  text         String
+  explanation  String?
+  correctAnswer String
+  difficulty   String
+  options      QuestionOption[]
+  tags         QuestionQuestionTag[]
+  companies    CompanyQuestionMapping[]
+  testQuestions TestQuestion[]
+  bookmarks    Bookmark[]
+  createdAt    DateTime                 @default(now())
+  updatedAt    DateTime                 @updatedAt
+}
+
+model QuestionOption {
+  id         String   @id @default(uuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  value      String
+  isCorrect  Boolean  @default(false)
+}
+
+model QuestionTag {
+  id        String                @id @default(uuid())
+  name      String                @unique
+  questions QuestionQuestionTag[]
+}
+
+model QuestionQuestionTag {
+  questionId String
+  tagId      String
+  question   Question    @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tag        QuestionTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, tagId])
+}
+
+model CompanyQuestionMapping {
+  companyId  String
+  questionId String
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+
+  @@id([companyId, questionId])
+}
+
+model Test {
+  id          String         @id @default(uuid())
+  workspaceId String
+  workspace   Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  topicId     String
+  topic       Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  score       Float?
+  passed      Boolean        @default(false)
+  timeLimit   Int            @default(0)
+  timeSpent   Int            @default(0)
+  status      String         @default("STARTED")
+  questions   TestQuestion[]
+  attempts    Attempt[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model TestQuestion {
+  id            String   @id @default(uuid())
+  testId        String
+  test          Test     @relation(fields: [testId], references: [id], onDelete: Cascade)
+  questionId    String
+  question      Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  studentAnswer String?
+  isCorrect     Boolean?
+  sequenceOrder Int      @default(0)
+
+  @@unique([testId, questionId])
+}
+
+model Attempt {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  testId      String
+  test        Test      @relation(fields: [testId], references: [id], onDelete: Cascade)
+  score       Float
+  passed      Boolean
+  createdAt   DateTime  @default(now())
+}
+
+model Progress {
+  id                      String    @id @default(uuid())
+  workspaceId             String    @unique
+  workspace               Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  currentSubjectId        String?
+  currentTopicId          String?
+  completedTopicsCount    Int       @default(0)
+  completedSubtopicsCount Int       @default(0)
+  completionPercentage    Float     @default(0.0)
+  lastActivityAt          DateTime  @default(now())
+  masteryScorePlaceholder Float     @default(0.0)
+}
+
+model Bookmark {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  questionId  String?
+  question    Question? @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  subtopicId  String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, questionId])
+  @@unique([workspaceId, subtopicId])
+}
+
+model Analytics {
+  id                  String    @id @default(uuid())
+  workspaceId         String    @unique
+  workspace           Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  totalProgress       Float     @default(0.0)
+  subjectProgressJson String    @default("{}")
+  topicProgressJson   String    @default("{}")
+  attemptsCount       Int       @default(0)
+  averageScore        Float     @default(0.0)
+  weakTopicsJson      String    @default("[]")
+  strongTopicsJson    String    @default("[]")
+  studyStreak         Int       @default(0)
+  companyReadiness    Float     @default(0.0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  @@index([workspaceId])
+}
+
+model StudyHistory {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  topicId     String?
+  subtopicId  String?
+  studyStart  DateTime  @default(now())
+  studyEnd    DateTime?
+  duration    Int       @default(0)
+  createdAt   DateTime  @default(now())
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+}
