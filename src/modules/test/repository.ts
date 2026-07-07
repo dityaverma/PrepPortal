@@ -14,12 +14,23 @@ export class TestRepository {
     return prisma.test.findUnique({
       where: { id },
       include: {
-        workspace: true,
+        workspace: {
+          include: {
+            companies: {
+              include: {
+                company: true,
+              },
+            },
+          },
+        },
         questions: {
           include: {
             question: {
               include: {
                 options: true,
+                subtopic: true,
+                subject: true,
+                topic: true,
               },
             },
           },

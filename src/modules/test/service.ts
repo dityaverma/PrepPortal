@@ -2,6 +2,7 @@ import { TestRepository, testRepository } from "./repository";
 import { CreateTestInput, SubmitTestInput } from "./dto";
 import { NotFoundError, ValidationError } from "@/common/errors";
 import { workspaceRepository } from "../workspace/repository";
+import { adaptiveEngine } from "../antigravity/adaptive-engine";
 
 /**
  * Test Assessment Engine Service
@@ -75,14 +76,14 @@ export class TestService {
    * Processes test answer sheet submissions, grades the choices, and logs outcomes.
    */
   async submitTest(userId: string, testId: string, data: SubmitTestInput) {
-    // 1. Load the target test record with question keys
+    // load the target test record with question keys
     const test = await this.repository.findById(testId);
 
     if (!test) {
       throw new NotFoundError("Test not found");
     }
 
-    // Verify workspace permissions
+    // verify workspace permissions
     if (test.workspace.userId !== userId) {
       throw new NotFoundError("Workspace unauthorized");
     }
@@ -91,7 +92,7 @@ export class TestService {
       throw new ValidationError("Test has already been submitted");
     }
 
-    // 2. Create index mapping of student answers
+    // create index mapping of student answers
     const answersMap = new Map(data.answers.map((a) => [a.questionId, a.studentAnswer]));
     let correctCount = 0;
     const totalQuestions = test.questions.length;
@@ -105,7 +106,10 @@ export class TestService {
       explanation: string | null;
     }> = [];
 
-    // Execute evaluations and writes inside a Transaction via repository
+    const wrongQuestionIds: string[] = [];
+    const questionMetadata: any[] = [];
+
+    // execute evaluations and writes inside a transaction via repository
     await this.repository.runTransaction(async (tx) => {
       for (const tq of test.questions) {
         const studentAns = answersMap.get(tq.questionId) || "";
@@ -113,6 +117,15 @@ export class TestService {
         
         if (isCorrect) {
           correctCount++;
+        } else {
+          wrongQuestionIds.push(tq.questionId);
+          questionMetadata.push({
+            id: tq.questionId,
+            concept: tq.question.subtopic?.name || "general concept",
+            pattern: "general pattern",
+            questionType: tq.question.questionType,
+            difficulty: tq.question.difficulty,
+          });
         }
 
         await tx.testQuestion.update({
@@ -171,6 +184,26 @@ export class TestService {
         evaluation: evaluationResults,
       };
     });
+
+    const finalScore = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
+    const finalPassed = finalScore >= 75.0;
+
+    // only call adaptive engine if score is below seventy five percent
+    if (!finalPassed) {
+      await adaptiveEngine.analyzeAssessmentAttempt({
+        userId,
+        workspaceId: test.workspaceId,
+        role: test.workspace.targetRole || "Software Engineer",
+        selectedCompanies: test.workspace.companies?.map((c: any) => c.company.name) || [],
+        subject: test.questions[0]?.question.subject.name || "Computer Science",
+        subjectId: test.questions[0]?.question.subjectId || "",
+        topic: test.questions[0]?.question.topic.name || "Algorithms",
+        topicId: test.topicId,
+        score: finalScore,
+        wrongQuestionIds,
+        questionMetadata,
+      });
+    }
 
     return this.repository.findById(testId);
   }

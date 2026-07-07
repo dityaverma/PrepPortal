@@ -20,7 +20,7 @@ class MockJobQueue<T = any> implements IJobQueue<T> {
     console.log(`[BullMQ Mock Queue: ${this.name}] Added job:`, job);
     
     // Simulate async background execution
-    setTimeout(async () => {
+    const runHandlers = async () => {
       for (const handler of this.handlers) {
         try {
           await handler(job);
@@ -28,7 +28,13 @@ class MockJobQueue<T = any> implements IJobQueue<T> {
           console.error(`[BullMQ Mock Queue: ${this.name}] Error processing job ${job.id}:`, err);
         }
       }
-    }, 100);
+    };
+
+    if (process.env.NODE_ENV === "test") {
+      await runHandlers();
+    } else {
+      setTimeout(runHandlers, 100);
+    }
 
     return job;
   }

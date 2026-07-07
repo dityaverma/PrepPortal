@@ -48,23 +48,30 @@ model RolePermission {
 }
 
 model Workspace {
-  id           String             @id @default(uuid())
-  name         String
-  targetRole   String
-  userId       String
-  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  archived     Boolean            @default(false)
-  archivedAt   DateTime?
-  companies    WorkspaceCompany[]
-  roadmaps     Roadmap[]
-  tests        Test[]
-  attempts     Attempt[]
-  progress     Progress?
-  bookmarks    Bookmark[]
-  analytics    Analytics[]
-  studyHistory StudyHistory[]
-  createdAt    DateTime           @default(now())
-  updatedAt    DateTime           @updatedAt
+  id                    String                  @id @default(uuid())
+  name                  String
+  targetRole            String
+  userId                String
+  user                  User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  archived              Boolean                 @default(false)
+  archivedAt            DateTime?
+  companies             WorkspaceCompany[]
+  roadmaps              Roadmap[]
+  tests                 Test[]
+  attempts              Attempt[]
+  progress              Progress?
+  bookmarks             Bookmark[]
+  analytics             Analytics[]
+  studyHistory          StudyHistory[]
+  recoveryQuizzes       RecoveryQuiz[]
+  recoveryAttempts      RecoveryAttempt[]
+  weakConcepts          WeakConcept[]
+  weakPatterns          WeakPattern[]
+  roadmapMutations      RoadmapMutation[]
+  conceptMasteries      ConceptMastery[]
+  recommendationHistory RecommendationHistory[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 
   @@index([userId])
 }
@@ -92,29 +99,38 @@ model WorkspaceCompany {
 }
 
 model Subject {
-  id          String     @id @default(uuid())
-  name        String     @unique
-  description String?
-  topics      Topic[]
-  questions   Question[]
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id              String         @id @default(uuid())
+  name            String         @unique
+  description     String?
+  topics          Topic[]
+  questions       Question[]
+  recoveryQuizzes RecoveryQuiz[]
+  quizzes         Quiz[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 }
 
 model Topic {
-  id            String             @id @default(uuid())
-  name          String
-  description   String?
-  subjectId     String
-  subject       Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  subtopics     Subtopic[]
-  roadmapNodes  RoadmapNode[]
-  questions     Question[]
-  tests         Test[]
-  prerequisites TopicPrerequisite[] @relation("TopicPrerequisites")
-  requiredFor   TopicPrerequisite[] @relation("TopicRequiredFor")
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
+  id                    String                  @id @default(uuid())
+  name                  String
+  description           String?
+  subjectId             String
+  subject               Subject                 @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  subtopics             Subtopic[]
+  roadmapNodes          RoadmapNode[]
+  questions             Question[]
+  tests                 Test[]
+  prerequisites         TopicPrerequisite[]     @relation("TopicPrerequisites")
+  requiredFor           TopicPrerequisite[]     @relation("TopicRequiredFor")
+  recoveryQuizzes       RecoveryQuiz[]
+  weakConcepts          WeakConcept[]
+  weakPatterns          WeakPattern[]
+  roadmapMutations      RoadmapMutation[]
+  conceptMasteries      ConceptMastery[]
+  recommendationHistory RecommendationHistory[]
+  quizzes               Quiz[]
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
 
   @@unique([subjectId, name])
 }
@@ -136,6 +152,7 @@ model Subtopic {
   topic       Topic       @relation(fields: [topicId], references: [id], onDelete: Cascade)
   studyLinks  StudyLink[]
   questions   Question[]
+  quizzes     Quiz[]
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -183,25 +200,26 @@ model RoadmapNode {
 }
 
 model Question {
-  id           String                   @id @default(uuid())
-  subjectId    String
-  subject      Subject                  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
-  topicId      String
-  topic        Topic                    @relation(fields: [topicId], references: [id], onDelete: Cascade)
-  subtopicId   String
-  subtopic     Subtopic                 @relation(fields: [subtopicId], references: [id], onDelete: Cascade)
-  questionType String
-  text         String
-  explanation  String?
+  id            String                   @id @default(uuid())
+  subjectId     String
+  subject       Subject                  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topicId       String
+  topic         Topic                    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  subtopicId    String
+  subtopic      Subtopic                 @relation(fields: [subtopicId], references: [id], onDelete: Cascade)
+  questionType  String
+  text          String
+  explanation   String?
   correctAnswer String
-  difficulty   String
-  options      QuestionOption[]
-  tags         QuestionQuestionTag[]
-  companies    CompanyQuestionMapping[]
+  difficulty    String
+  options       QuestionOption[]
+  tags          QuestionQuestionTag[]
+  companies     CompanyQuestionMapping[]
   testQuestions TestQuestion[]
-  bookmarks    Bookmark[]
-  createdAt    DateTime                 @default(now())
-  updatedAt    DateTime                 @updatedAt
+  bookmarks     Bookmark[]
+  quizQuestions QuizQuestion[]
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
 }
 
 model QuestionOption {
@@ -354,3 +372,181 @@ model AuditLog {
   ipAddress String?
   createdAt DateTime @default(now())
 }
+
+model RecoveryQuiz {
+  id            String             @id @default(uuid())
+  workspaceId   String
+  workspace     Workspace          @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  subjectId     String
+  subject       Subject            @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topicId       String
+  topic         Topic              @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  attemptNumber Int
+  questions     RecoveryQuestion[]
+  attempts      RecoveryAttempt[]
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  @@index([workspaceId])
+  @@index([subjectId])
+  @@index([topicId])
+}
+
+model RecoveryQuestion {
+  id           String       @id @default(uuid())
+  quizId       String
+  quiz         RecoveryQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  question     String
+  options      String       // json array
+  answer       String
+  explanation  String?
+  difficulty   String
+  concept      String
+  pattern      String
+  questionType String
+
+  @@index([quizId])
+}
+
+model RecoveryAttempt {
+  id          String       @id @default(uuid())
+  quizId      String
+  quiz        RecoveryQuiz @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  workspaceId String
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  score       Float
+  answersJson String       // json of answers
+  passed      Boolean
+  createdAt   DateTime     @default(now())
+
+  @@index([quizId])
+  @@index([workspaceId])
+}
+
+model WeakConcept {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  topicId     String
+  topic       Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  concept     String
+  count       Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, topicId, concept])
+  @@index([workspaceId])
+  @@index([topicId])
+}
+
+model WeakPattern {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  topicId     String
+  topic       Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  pattern     String
+  count       Int       @default(1)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, topicId, pattern])
+  @@index([workspaceId])
+  @@index([topicId])
+}
+
+model RoadmapMutation {
+  id                String    @id @default(uuid())
+  workspaceId       String
+  workspace         Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  topicId           String
+  topic             Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  originalNodesJson String
+  mutatedNodesJson  String
+  active            Boolean   @default(true)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([workspaceId])
+  @@index([topicId])
+}
+
+model ConceptMastery {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  topicId     String
+  topic       Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  concept     String
+  masteryScore Float     @default(0.0)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([workspaceId, topicId, concept])
+  @@index([workspaceId])
+  @@index([topicId])
+}
+
+model RecommendationHistory {
+  id                 String    @id @default(uuid())
+  workspaceId        String
+  workspace          Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  topicId            String
+  topic              Topic     @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  attemptNumber      Int
+  recommendationType String
+  createdAt          DateTime  @default(now())
+
+  @@index([workspaceId])
+  @@index([topicId])
+}
+
+model PromptCache {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+}
+
+model Quiz {
+  id          String         @id @default(uuid())
+  name        String
+  subjectId   String
+  subject     Subject        @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  topicId     String
+  topic       Topic          @relation(fields: [topicId], references: [id], onDelete: Cascade)
+  subtopicId  String
+  subtopic    Subtopic       @relation(fields: [subtopicId], references: [id], onDelete: Cascade)
+  questions   QuizQuestion[]
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([subjectId])
+  @@index([topicId])
+  @@index([subtopicId])
+}
+
+model QuizQuestion {
+  id         String   @id @default(uuid())
+  quizId     String
+  quiz       Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([quizId, questionId])
+  @@index([quizId])
+  @@index([questionId])
+}
+
+model ImportHistory {
+  id               String   @id @default(uuid())
+  fileName         String
+  fileType         String
+  extractedCount   Int
+  status           String
+  validationReport String?  // JSON validation report details
+  createdAt        DateTime @default(now())
+}
+
+
