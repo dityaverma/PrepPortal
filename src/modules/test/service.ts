@@ -1,30 +1,23 @@
-/**
- * Test Assessment Engine Service
- * 
- * Manages the lifecycle of mock tests and assessments for users:
- * 1. Test Generation: Randomizes questions based on topics and difficulties, with fallback search rules.
- * 2. Submission & Grading: Automatically grades student choices, updates test nodes, records attempt logs.
- * 3. Learning State Machine: Updates roadmap node statuses (LOCKED ➔ UNLOCKED ➔ COMPLETED/FAILED)
- *    and dynamically unlocks child nodes by satisfying multi-prerequisite relationships.
- * 4. Analytics Aggregation: Dynamically updates weak/strong topic designations.
- */
-
-import { prisma } from "@/lib/prisma";
+import { TestRepository, testRepository } from "./repository";
 import { CreateTestInput, SubmitTestInput } from "./dto";
 import { NotFoundError, ValidationError } from "@/common/errors";
 import { workspaceRepository } from "../workspace/repository";
 
+/**
+ * Test Assessment Engine Service
+ * 
+ * Coordinates test generation, random question picking, submission grading,
+ * and updates progression roadmaps/workspace analytics metrics.
+ */
 export class TestService {
-  
+  private repository: TestRepository;
+
+  constructor(repository: TestRepository = testRepository) {
+    this.repository = repository;
+  }
+
   /**
    * Generates a new customized mock test for a student workspace.
-   * 
-   * Design Decisions:
-   * - Fallback Mechanics: If a user selects target preparation companies (e.g. Google, Amazon), 
-   *   we first search for questions mapped to those companies. If none exist, we strip the 
-   *   company filter and fetch general questions to avoid empty-test generation failures.
-   * - Security Isolation: Correct answers are stripped from the response sent to the browser
-   *   to prevent students from reading the raw JSON payload to bypass the test.
    */
   async createTest(userId: string, data: CreateTestInput) {
     // 1. Verify workspace ownership and authorization
@@ -57,23 +50,13 @@ export class TestService {
       };
     }
 
-    // Perform query to search matching questions
-    let questions = await prisma.question.findMany({
-      where: whereClause,
-      include: {
-        options: true,
-      },
-    });
+    // Perform query to search matching questions via repository
+    let questions = await this.repository.findQuestions(whereClause);
 
     // Fallback: If no company questions matched, load general questions on this topic
     if (questions.length === 0 && companyIds.length > 0) {
       delete whereClause.companies;
-      questions = await prisma.question.findMany({
-        where: whereClause,
-        include: {
-          options: true,
-        },
-      });
+      questions = await this.repository.findQuestions(whereClause);
     }
 
     if (questions.length === 0) {
@@ -84,74 +67,16 @@ export class TestService {
     const randomized = questions.sort(() => 0.5 - Math.random());
     const selected = randomized.slice(0, data.limit);
 
-    // 4. Create the Test entity inside a database transaction to ensure atomicity
-    return prisma.$transaction(async (tx) => {
-      const test = await tx.test.create({
-        data: {
-          workspaceId: data.workspaceId,
-          topicId: data.topicId,
-          status: "STARTED",
-        },
-      });
-
-      // Insert mappings for all test questions with order sequences
-      await tx.testQuestion.createMany({
-        data: selected.map((q, idx) => ({
-          testId: test.id,
-          questionId: q.id,
-          sequenceOrder: idx + 1,
-        })),
-      });
-
-      // Fetch the created test package. HIDE correct answer boolean/values from response
-      const testWithQuestions = await tx.test.findUnique({
-        where: { id: test.id },
-        include: {
-          questions: {
-            include: {
-              question: {
-                include: {
-                  options: {
-                    select: {
-                      id: true,
-                      text: true,
-                      value: true,
-                      // isCorrect is purposely omitted to prevent answer spoofing
-                    },
-                  },
-                },
-              },
-            },
-            orderBy: { sequenceOrder: "asc" },
-          },
-        },
-      });
-
-      return testWithQuestions;
-    });
+    // 4. Create the Test entity inside database transaction via repository
+    return this.repository.createTestWithQuestions(data.workspaceId, data.topicId, selected);
   }
 
   /**
    * Processes test answer sheet submissions, grades the choices, and logs outcomes.
-   * 
-   * Design Decisions:
-   * - Atomic Transactions: Evaluating test questions, logging attempts, updating roadmap statuses,
-   *   and compiling analytics are grouped inside a single Prisma `$transaction`. If any operation fails,
-   *   the DB rolls back to protect consistency.
    */
   async submitTest(userId: string, testId: string, data: SubmitTestInput) {
     // 1. Load the target test record with question keys
-    const test = await prisma.test.findUnique({
-      where: { id: testId },
-      include: {
-        workspace: true,
-        questions: {
-          include: {
-            question: true,
-          },
-        },
-      },
-    });
+    const test = await this.repository.findById(testId);
 
     if (!test) {
       throw new NotFoundError("Test not found");
@@ -180,18 +105,16 @@ export class TestService {
       explanation: string | null;
     }> = [];
 
-    // Execute evaluations and writes inside a Prisma Transaction
-    await prisma.$transaction(async (tx) => {
+    // Execute evaluations and writes inside a Transaction via repository
+    await this.repository.runTransaction(async (tx) => {
       for (const tq of test.questions) {
         const studentAns = answersMap.get(tq.questionId) || "";
-        // Strict evaluation of case-insensitive trimmed strings
         const isCorrect = studentAns.trim().toLowerCase() === tq.question.correctAnswer.trim().toLowerCase();
         
         if (isCorrect) {
           correctCount++;
         }
 
-        // Save student response to mapping table
         await tx.testQuestion.update({
           where: { id: tq.id },
           data: {
@@ -210,11 +133,9 @@ export class TestService {
         });
       }
 
-      // Compute grade percentages. Standard pass threshold is 75%
       const score = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0;
       const passed = score >= 75.0;
 
-      // Update parent Test status
       await tx.test.update({
         where: { id: testId },
         data: {
@@ -225,7 +146,6 @@ export class TestService {
         },
       });
 
-      // Record a persistent Attempt entry
       await tx.attempt.create({
         data: {
           workspaceId: test.workspaceId,
@@ -235,14 +155,12 @@ export class TestService {
         },
       });
 
-      // 3. Roadmap Unlock engine updates
       if (passed) {
         await this.handleTopicCompletion(tx, test.workspaceId, test.topicId);
       } else {
         await this.handleTopicFailure(tx, test.workspaceId, test.topicId);
       }
 
-      // 4. Trigger analytics re-calculation
       await this.updateAnalytics(tx, test.workspaceId);
 
       return {
@@ -254,32 +172,50 @@ export class TestService {
       };
     });
 
-    // Re-fetch the updated assessment object with standard parameters
-    return prisma.test.findUnique({
-      where: { id: testId },
-      include: {
-        questions: {
-          include: {
-            question: true,
-          },
-          orderBy: { sequenceOrder: "asc" },
-        },
-      },
-    });
+    return this.repository.findById(testId);
   }
 
   /**
-   * Updates state variables upon topic completion.
-   * Traverses prerequisites to see if any child topics can now be unlocked.
+   * Retrieves active test or submitted test details with appropriate answer omissions.
    */
+  async getTestDetails(userId: string, testId: string) {
+    const test = await this.repository.findById(testId);
+
+    if (!test) {
+      throw new NotFoundError("Test not found");
+    }
+
+    if (test.workspace.userId !== userId) {
+      throw new NotFoundError("Workspace unauthorized");
+    }
+
+    if (test.status === "STARTED") {
+      const safeQuestions = test.questions.map((q) => ({
+        ...q,
+        question: {
+          ...q.question,
+          correctAnswer: undefined,
+          explanation: undefined,
+          options: q.question.options.map((opt) => ({
+            id: opt.id,
+            text: opt.text,
+            value: opt.value,
+          })),
+        },
+      }));
+      
+      return { ...test, questions: safeQuestions };
+    }
+
+    return test;
+  }
+
   private async handleTopicCompletion(tx: any, workspaceId: string, topicId: string) {
-    // Locate the roadmap container
     const roadmap = await tx.roadmap.findFirst({
       where: { workspaceId },
     });
 
     if (roadmap) {
-      // 1. Mark target roadmap node as COMPLETED
       await tx.roadmapNode.upsert({
         where: {
           roadmapId_topicId: { roadmapId: roadmap.id, topicId },
@@ -294,7 +230,6 @@ export class TestService {
         },
       });
 
-      // 2. Identify all topics listing this topic as a prerequisite
       const dependents = await tx.topicPrerequisite.findMany({
         where: { prerequisiteId: topicId },
         include: {
@@ -306,11 +241,9 @@ export class TestService {
         },
       });
 
-      // 3. For each dependent topic, verify if all other prerequisites are also completed
       for (const dep of dependents) {
         const prereqIds = dep.topic.prerequisites.map((p: any) => p.prerequisiteId);
         
-        // Count how many prerequisites are marked COMPLETED in this workspace
         const completedCount = await tx.roadmapNode.count({
           where: {
             roadmapId: roadmap.id,
@@ -319,7 +252,6 @@ export class TestService {
           },
         });
 
-        // If the count of completed prerequisites matches required prerequisite count, unlock it!
         if (completedCount === prereqIds.length) {
           await tx.roadmapNode.upsert({
             where: {
@@ -338,7 +270,6 @@ export class TestService {
       }
     }
 
-    // 4. Update the Workspace overall progress metrics
     const completedTopics = await tx.roadmapNode.count({
       where: {
         roadmap: { workspaceId },
@@ -364,10 +295,6 @@ export class TestService {
     });
   }
 
-  /**
-   * Updates state variables upon topic failure.
-   * Assigns a 'FAILED' status code to trigger recovery queues or recommendations.
-   */
   private async handleTopicFailure(tx: any, workspaceId: string, topicId: string) {
     const roadmap = await tx.roadmap.findFirst({
       where: { workspaceId },
@@ -390,12 +317,7 @@ export class TestService {
     }
   }
 
-  /**
-   * Re-calculates and caches computed metrics inside the Analytics table.
-   * Compiles average test scores, attempts count, and flags strong/weak areas based on attempt results.
-   */
   private async updateAnalytics(tx: any, workspaceId: string) {
-    // Fetch all logged test attempts for this workspace
     const attempts = await tx.attempt.findMany({
       where: { workspaceId },
     });
@@ -403,10 +325,6 @@ export class TestService {
     const count = attempts.length;
     const avgScore = count > 0 ? attempts.reduce((acc: number, curr: any) => acc + curr.score, 0) / count : 0;
 
-    // Detect strong and weak topics
-    // Decision Rule:
-    // - Strong Topic: The student's latest test attempt resulted in a passing score.
-    // - Weak Topic: The student's latest test attempt resulted in a failing score.
     const topics = await tx.topic.findMany();
     const weakTopics: string[] = [];
     const strongTopics: string[] = [];
@@ -431,7 +349,6 @@ export class TestService {
 
     const progress = await tx.progress.findUnique({ where: { workspaceId } });
 
-    // Cache compiled metrics in the Analytics database row
     await tx.analytics.upsert({
       where: { workspaceId },
       create: {
@@ -454,4 +371,3 @@ export class TestService {
 }
 
 export const testService = new TestService();
-

@@ -1,4 +1,3 @@
-ARCHITECTURE.md
 node_modules
 .next
-.env
+src/generated

@@ -11,7 +11,14 @@
  * 3. In non-production environments, we save the instance to the global context to reuse it.
  */
 
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient } from "../generated/prisma/client";
+import { PrismaPg } from "@prisma/adapter-pg";
+import { Pool } from "pg";
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+});
+const adapter = new PrismaPg(pool);
 
 // Define a type-safe structure for the global object to prevent TS compile warnings.
 const globalForPrisma = global as unknown as { prisma: PrismaClient };
@@ -20,6 +27,7 @@ const globalForPrisma = global as unknown as { prisma: PrismaClient };
 export const prisma =
   globalForPrisma.prisma ||
   new PrismaClient({
+    adapter,
     log: ["query", "info", "warn", "error"],
   });
 

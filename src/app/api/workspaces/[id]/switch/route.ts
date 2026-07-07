@@ -1,10 +1,6 @@
-import { apiHandler, successResponse } from "@/common/errors";
-import { getUserContext } from "@/common/auth-helper";
-import { workspaceService } from "@/modules/workspace/service";
+import { apiHandler } from "@/common/errors";
+import { workspaceController } from "@/modules/workspace/controller";
 
-export const POST = apiHandler(async (req: Request, { params }: { params: Promise<{ id: string }> }) => {
-  const { id } = await params;
-  const { userId } = getUserContext(req);
-  const result = await workspaceService.switchWorkspace(id, userId);
-  return successResponse(result, "Switched workspace successfully");
+export const POST = apiHandler(async (req: Request, context: { params: Promise<{ id: string }> }) => {
+  return workspaceController.switch(req, context);
 });
