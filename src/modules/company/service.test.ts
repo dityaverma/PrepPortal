@@ -39,7 +39,7 @@ describe("CompanyService", () => {
       mockCompanyRepository.findByName.mockResolvedValue({ id: "comp-1", name: "Google" });
 
       // check if validation error is thrown for duplicate name
-      await expect(companyService.create({ name: "Google" })).rejects.toThrow(ValidationError);
+      await expect(companyService.create({ name: "Google", active: true })).rejects.toThrow(ValidationError);
     });
 
     it("should create company successfully", async () => {
@@ -47,7 +47,7 @@ describe("CompanyService", () => {
       mockCompanyRepository.create.mockResolvedValue({ id: "comp-2", name: "Apple" });
 
       // check if company is created successfully
-      const result = await companyService.create({ name: "Apple" });
+      const result = await companyService.create({ name: "Apple", active: true });
       expect(result.name).toBe("Apple");
     });
   });

@@ -2,7 +2,7 @@ import { TestRepository, testRepository } from "./repository";
 import { CreateTestInput, SubmitTestInput } from "./dto";
 import { NotFoundError, ValidationError } from "@/common/errors";
 import { workspaceRepository } from "../workspace/repository";
-import { adaptiveEngine } from "../antigravity/adaptive-engine";
+import { adaptiveEngine } from "../adaptive/adaptive-engine";
 
 /**
  * Test Assessment Engine Service

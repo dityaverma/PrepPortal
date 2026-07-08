@@ -3,12 +3,22 @@ import { roadmapEngine } from "./roadmap-engine";
 import { getUserContext } from "@/common/auth-helper";
 import { successResponse, ValidationError, NotFoundError } from "@/common/errors";
 import { prisma } from "@/lib/prisma";
+import { workspaceRepository } from "../workspace/repository";
 
 // controller managing adaptive api routing and payload execution
 export class AdaptiveController {
+  // helper to assert workspace ownership and authenticate user context
+  private async verifyWorkspaceAccess(workspaceId: string, req: Request) {
+    const { userId } = getUserContext(req);
+    const ws = await workspaceRepository.findById(workspaceId, userId);
+    if (!ws) {
+      throw new NotFoundError("Workspace not found or unauthorized");
+    }
+    return { userId, ws };
+  }
+
   // handle score analysis and trigger next recovery step
   async analyze(req: Request) {
-    const { userId } = getUserContext(req);
     const body = await req.json();
 
     const {
@@ -27,6 +37,8 @@ export class AdaptiveController {
     if (!workspaceId || !topicId || score === undefined) {
       throw new ValidationError("missing required parameters");
     }
+
+    const { userId } = await this.verifyWorkspaceAccess(workspaceId, req);
 
     const result = await adaptiveEngine.analyzeAssessmentAttempt({
       userId,
@@ -56,7 +68,6 @@ export class AdaptiveController {
 
   // record recovery quiz attempt score
   async submitRecovery(req: Request) {
-    getUserContext(req);
     const body = await req.json();
 
     const { quizId, workspaceId, score, answers } = body;
@@ -65,11 +76,13 @@ export class AdaptiveController {
       throw new ValidationError("missing required parameters");
     }
 
+    await this.verifyWorkspaceAccess(workspaceId, req);
+
     const quiz = await prisma.recoveryQuiz.findUnique({
       where: { id: quizId },
     });
 
-    if (!quiz) {
+    if (!quiz || quiz.workspaceId !== workspaceId) {
       throw new NotFoundError("recovery quiz not found");
     }
 
@@ -102,6 +115,8 @@ export class AdaptiveController {
       throw new ValidationError("workspaceId query parameter is required");
     }
 
+    await this.verifyWorkspaceAccess(workspaceId, req);
+
     const roadmap = await roadmapEngine.getActiveRoadmap(workspaceId);
     return successResponse(roadmap, "active workspace roadmap retrieved successfully");
   }
@@ -114,6 +129,8 @@ export class AdaptiveController {
     if (!workspaceId) {
       throw new ValidationError("workspaceId query parameter is required");
     }
+
+    await this.verifyWorkspaceAccess(workspaceId, req);
 
     const mastery = await prisma.conceptMastery.findMany({
       where: { workspaceId },
@@ -130,6 +147,8 @@ export class AdaptiveController {
     if (!workspaceId || !topicId) {
       throw new ValidationError("missing required parameters");
     }
+
+    await this.verifyWorkspaceAccess(workspaceId, req);
 
     // delete previous recovery quizzes to reset attempt count
     await prisma.recoveryQuiz.deleteMany({
@@ -152,6 +171,8 @@ export class AdaptiveController {
     if (!workspaceId) {
       throw new ValidationError("workspaceId query parameter is required");
     }
+
+    await this.verifyWorkspaceAccess(workspaceId, req);
 
     const history = await prisma.recommendationHistory.findMany({
       where: { workspaceId },

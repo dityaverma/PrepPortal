@@ -1,6 +1,8 @@
 const { pathsToModuleNameMapper } = require("ts-jest");
 const { compilerOptions } = require("./tsconfig.json");
 
+require("dotenv").config();
+
 module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",

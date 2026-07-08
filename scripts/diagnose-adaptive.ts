@@ -2,12 +2,12 @@ import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import { adaptiveEngine } from "../src/modules/antigravity/adaptive-engine";
-import { roadmapEngine } from "../src/modules/antigravity/roadmap-engine";
+import { adaptiveEngine } from "../src/modules/adaptive/adaptive-engine";
+import { roadmapEngine } from "../src/modules/adaptive/roadmap-engine";
 
-// run the end to end pipeline diagnostic checks for the antigravity ai engine
+// run the end to end pipeline diagnostic checks for the adaptive ai engine
 async function testWorkflow() {
-  console.log("=== testing antigravity ai engine integration ===");
+  console.log("=== testing adaptive ai engine integration ===");
 
   const dbUrl = process.env.DATABASE_URL;
   const geminiKey = process.env.GEMINI_API_KEY;

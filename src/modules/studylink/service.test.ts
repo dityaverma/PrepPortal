@@ -25,11 +25,11 @@ describe("StudyLinkService", () => {
     });
 
     it("should return study link if found", async () => {
-      mockStudyLinkRepository.findById.mockResolvedValue({ id: "link-1", url: "https://example.com" });
+      mockStudyLinkRepository.findById.mockResolvedValue({ id: "link-1", gfgUrl: "https://example.com" });
 
       // verify successful retrieval
       const result = await studyLinkService.getById("link-1");
-      expect(result.url).toBe("https://example.com");
+      expect(result.gfgUrl).toBe("https://example.com");
     });
   });
 

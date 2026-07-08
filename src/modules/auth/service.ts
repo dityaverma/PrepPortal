@@ -14,10 +14,10 @@ import { AuthRepository, authRepository } from "./repository";
 import { RegisterInput, LoginInput } from "./dto";
 import { AuthError, ValidationError } from "@/common/errors";
 
-// Construct key for JWT encryption using Web Crypto API compatible encoding
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "fallback-temporary-development-secret-key-32-chars"
-);
+if (!process.env.JWT_SECRET) {
+  throw new Error("CRITICAL CONFIGURATION ERROR: process.env.JWT_SECRET is not configured.");
+}
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 export class AuthService {
   private repository: AuthRepository;

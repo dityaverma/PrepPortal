@@ -40,7 +40,7 @@ describe("SubtopicService", () => {
 
       // verify that duplicate subtopic names throw validation error
       await expect(
-        subtopicService.create({ name: "Arrays", topicId: "topic-1", index: 1 })
+        subtopicService.create({ name: "Arrays", topicId: "topic-1" })
       ).rejects.toThrow(ValidationError);
     });
   });

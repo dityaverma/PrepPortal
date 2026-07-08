@@ -1,7 +1,7 @@
 import { redisService } from "@/lib/redis";
 
 // cache manager handling prompts responses and quizzes via redis service
-export class AntigravityCache {
+export class AdaptiveCache {
   private defaultTtl: number;
 
   constructor() {
@@ -26,8 +26,8 @@ export class AntigravityCache {
 
   // generate unique key from parts
   makeKey(...parts: string[]): string {
-    return `antigravity:${parts.join(":")}`;
+    return `adaptive:${parts.join(":")}`;
   }
 }
 
-export const antigravityCache = new AntigravityCache();
+export const adaptiveCache = new AdaptiveCache();

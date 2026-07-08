@@ -4,8 +4,8 @@ import { retryEngine, RecoveryAction } from "../retry-engine";
 import { recoveryEngine } from "../recovery-engine";
 import { roadmapEngine } from "../roadmap-engine";
 import { masteryEngine } from "../mastery-engine";
-import { antigravityCache } from "../cache";
-import { antigravityWorkers } from "../workers";
+import { adaptiveCache } from "../cache";
+import { adaptiveWorkers } from "../workers";
 
 // main adaptive engine orchestrator coordinating quiz evaluation pathways
 export class AdaptiveEngine {
@@ -105,12 +105,12 @@ export class AdaptiveEngine {
     let generatedQuiz: any = null;
 
     if (action === RecoveryAction.RECOVERY_QUIZ) {
-      const cacheKey = antigravityCache.makeKey(
+      const cacheKey = adaptiveCache.makeKey(
         input.workspaceId,
         input.topicId,
         `attempt-${attemptNumber}`
       );
-      const cachedQuiz = await antigravityCache.get(cacheKey);
+      const cachedQuiz = await adaptiveCache.get(cacheKey);
 
       if (cachedQuiz) {
         generatedQuiz = JSON.parse(cachedQuiz);
@@ -126,11 +126,11 @@ export class AdaptiveEngine {
         });
 
         // cache generated quiz response
-        await antigravityCache.set(cacheKey, JSON.stringify(generatedQuiz));
+        await adaptiveCache.set(cacheKey, JSON.stringify(generatedQuiz));
       }
 
       // queue notification alert and metrics updating jobs
-      await antigravityWorkers.queueNotification({
+      await adaptiveWorkers.queueNotification({
         userId: input.userId,
         title: "recovery quiz generated",
         message: "your custom recovery quiz is ready to study",
@@ -167,7 +167,7 @@ export class AdaptiveEngine {
         questions: staticQuestions,
       };
 
-      await antigravityWorkers.queueNotification({
+      await adaptiveWorkers.queueNotification({
         userId: input.userId,
         title: "mastery mode enabled",
         message: "complete the static mastery test to proceed",
@@ -175,7 +175,7 @@ export class AdaptiveEngine {
     }
 
     // queue background analytics update
-    await antigravityWorkers.queueAnalyticsUpdate({
+    await adaptiveWorkers.queueAnalyticsUpdate({
       workspaceId: input.workspaceId,
     });
 

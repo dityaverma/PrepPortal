@@ -1,4 +1,4 @@
-import { RecoveryQuizInput } from "../validators";
+import { RecoveryQuizInput } from "../validators/index";
 
 // provider interface for dynamic quiz generator engines
 export interface AIProvider {
@@ -18,8 +18,8 @@ export class GeminiProvider implements AIProvider {
   async generateRecoveryQuiz(prompt: string): Promise<RecoveryQuizInput> {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${this.modelName}:generateContent?key=${this.apiKey}`;
     
-    // check if api key is mock to bypass real fetch in unit tests
-    if (this.apiKey === "fallback-test-api-key") {
+    // check if api key is mock or env is test to bypass real fetch in unit tests
+    if (this.apiKey === "fallback-test-api-key" || process.env.NODE_ENV === "test") {
       // return a valid mock response for testing
       return this.getMockResponse();
     }

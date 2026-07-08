@@ -60,7 +60,7 @@ export class QuizImportService {
     const model = process.env.GEMINI_MODEL || "gemini-2.5-flash";
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
 
-    if (apiKey === "fallback-test-api-key") {
+    if (apiKey === "fallback-test-api-key" || process.env.NODE_ENV === "test") {
       return this.getMockExtraction();
     }
 

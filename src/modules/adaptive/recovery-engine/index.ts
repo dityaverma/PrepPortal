@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { GeminiProvider } from "../ai-provider";
 import { promptBuilder } from "../prompt-builder";
-import { RecoveryQuizSchema, RecoveryQuizInput } from "../validators";
+import { RecoveryQuizSchema, RecoveryQuizInput } from "../validators/index";
 
 // recovery quiz engine generates validates and stores ai generated tests on learning failure
 export class RecoveryEngine {

@@ -1,10 +1,10 @@
 import { createQueue } from "@/lib/bullmq";
 
 // background jobs coordinator using mock queue wrapper interfaces
-export class AntigravityWorkers {
-  private recoveryQueue = createQueue("antigravity-recovery");
-  private analyticsQueue = createQueue("antigravity-analytics");
-  private notificationQueue = createQueue("antigravity-notification");
+export class AdaptiveWorkers {
+  private recoveryQueue = createQueue("adaptive-recovery");
+  private analyticsQueue = createQueue("adaptive-analytics");
+  private notificationQueue = createQueue("adaptive-notification");
 
   constructor() {
     this.setupWorkers();
@@ -54,4 +54,4 @@ export class AntigravityWorkers {
   }
 }
 
-export const antigravityWorkers = new AntigravityWorkers();
+export const adaptiveWorkers = new AdaptiveWorkers();

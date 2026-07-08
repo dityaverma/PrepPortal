@@ -1,7 +1,6 @@
-/**
- * BullMQ interface wrappers (placeholder).
- * Ready to be connected to actual bullmq library with redis.
- */
+import { Queue, Worker } from "bullmq";
+import Redis from "ioredis";
+
 export interface IJobQueue<T = any> {
   add(name: string, data: T, opts?: any): Promise<any>;
   process(handler: (job: any) => Promise<void>): void;
@@ -19,7 +18,6 @@ class MockJobQueue<T = any> implements IJobQueue<T> {
     const job = { id: Math.random().toString(), name, data, opts, createdAt: new Date() };
     console.log(`[BullMQ Mock Queue: ${this.name}] Added job:`, job);
     
-    // Simulate async background execution
     const runHandlers = async () => {
       for (const handler of this.handlers) {
         try {
@@ -44,6 +42,46 @@ class MockJobQueue<T = any> implements IJobQueue<T> {
   }
 }
 
+class RealJobQueue<T = any> implements IJobQueue<T> {
+  private name: string;
+  private queue: Queue;
+  private connection: Redis;
+  private workers: Worker[] = [];
+
+  constructor(name: string, redisUrl: string) {
+    this.name = name;
+    this.connection = new Redis(redisUrl, {
+      maxRetriesPerRequest: null,
+      enableReadyCheck: false,
+    });
+    this.queue = new Queue(name, { connection: this.connection as any });
+  }
+
+  async add(name: string, data: T, opts?: any): Promise<any> {
+    return this.queue.add(name, data, opts);
+  }
+
+  process(handler: (job: any) => Promise<void>): void {
+    const worker = new Worker(
+      this.name,
+      async (job) => {
+        await handler(job);
+      },
+      { connection: this.connection as any }
+    );
+
+    worker.on("error", (err) => {
+      console.error(`[bullmq] worker error on queue ${this.name}:`, err);
+    });
+
+    this.workers.push(worker);
+  }
+}
+
+const useMock = process.env.NODE_ENV === "test" || !process.env.REDIS_URL;
+
 export const createQueue = (name: string): IJobQueue => {
-  return new MockJobQueue(name);
+  return useMock
+    ? new MockJobQueue(name)
+    : new RealJobQueue(name, process.env.REDIS_URL!);
 };

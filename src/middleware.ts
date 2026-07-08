@@ -17,10 +17,10 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-// Standard signing key constructed from environment variable secret
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || "fallback-temporary-development-secret-key-32-chars"
-);
+if (!process.env.JWT_SECRET) {
+  throw new Error("CRITICAL CONFIGURATION ERROR: process.env.JWT_SECRET is not configured.");
+}
+const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 // Endpoints that are accessible without an auth token
 const PUBLIC_PATHS = [

@@ -1,5 +1,5 @@
 import { apiHandler } from "@/common/errors";
-import { adaptiveController } from "@/modules/antigravity/controller";
+import { adaptiveController } from "@/modules/adaptive/controller";
 
 // reset retry state for topic
 export const POST = apiHandler(async (req: Request) => {

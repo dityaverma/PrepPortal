@@ -12,6 +12,7 @@
 import { RegisterSchema, LoginSchema } from "./dto";
 import { authService } from "./service";
 import { successResponse } from "@/common/errors";
+import { getUserContext } from "@/common/auth-helper";
 
 export class AuthController {
   /**
@@ -36,6 +37,24 @@ export class AuthController {
     const parsed = LoginSchema.parse(body);
     const result = await authService.login(parsed);
     return successResponse(result, "Login successful");
+  }
+
+  /**
+   * Returns current session parameters parsed from middleware authorization headers.
+   */
+  async session(req: Request) {
+    const userContext = getUserContext(req);
+    return successResponse({ user: userContext }, "Session active");
+  }
+
+  /**
+   * Clears the user's session context cookie by emitting a deletion header.
+   */
+  async logout(req: Request) {
+    getUserContext(req);
+    const res = successResponse({ success: true }, "Logout successful");
+    res.cookies.set("auth-token", "", { expires: new Date(0), path: "/" });
+    return res;
   }
 }
 
